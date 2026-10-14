@@ -1,3 +1,4 @@
+# 查找工具链并拼接 make 命令的辅助脚本
 import os
 from pathlib import Path
 import platform
