@@ -1,3 +1,4 @@
+# 检查 python 脚本环境
 import shutil
 import subprocess
 import sys
