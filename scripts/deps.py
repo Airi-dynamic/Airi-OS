@@ -1,78 +1,147 @@
-# 下载固定版本的外部组件，并校验哈希的工具脚本
+import argparse
 import hashlib
 import json
 import shutil
 import subprocess
 import tarfile
 from pathlib import Path
+from pathlib import PurePosixPath
 from tools import ROOT, tool
 
 
-# 按照字节内容全文计算 sha256
+# 给出路径，对文件计算摘要
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-# 取得 URL 对应的资源归档，如果 sha256 变了将会刷新缓存
+# 从指定 URL 下载到指定路径并校验 Hash 的函数
 def download(url, path, sha):
-    if not path.exists() or digest != sha:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_suffix(path.suffix + ".download")
+    # 已有就跳过
+    if path.is_file() and digest(path) == sha:
+        return
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".download")
+    try:
         subprocess.run(
-            ["curl", "-fsSL", "--retry", "3", url, "-o", str(temporary)], check=True
+            ["curl", "-fsSL", "--retry", "3", url, "-o", str(temporary)],
+            check=True,
+            capture_output=True,
         )
-        if digest(temporary) != sha:
-            temporary.unlink()
-            raise RuntimeError(f"资源 {url} 的 SHA-256 和预期不匹配")
-        temporary.replace(path)
+    except subprocess.CalledProcessError as error:
+        temporary.unlink(missing_ok=True)
+        raise RuntimeError(f"下载资源失败：{url}。请检查网络连接后重试。") from error
+    if digest(temporary) != sha:
+        temporary.unlink(missing_ok=True)
+        raise RuntimeError(f"资源 {url} 的 SHA-256 和预期不匹配")
+    temporary.replace(path)
 
 
-# 将 download 函数下载的压缩包解压放到正确位置
-def prepare():
-    # 加载配置文件
-    lock = json.loads((ROOT / "config/deps.lock.json").read_text())
+# 逐个下载所有依赖的函数
+def prepare(force=False):
+    # 读配置
+    lock = json.load((ROOT / "config/deps.lock.json").read_text())
 
-    # 下载 limine 加载器资源
+    # 开始下载 limine BootLoader
     dep = lock["limine"]
-    archive = ROOT / "third_party/limine-binary.tar.gz"
-    download(dep["url"], archive, dep["sha256"])
+    archive = ROOT / "third_party/limine_binary.tar.gz"
+    if force or not archive.is_file() or digest(archive) != dep["sha256"]:
+        download(dep["url"], archive, dep["sha256"])
     dest = ROOT / "third_party/limine"
-    # 如果目前没有已经可用的 limine 组件资源，进入下载和解包逻辑
-    if any(
+    expected = {name: sha for name, sha in dep["files"].items()}
+    if force or any(
         not (dest / name).is_file() or digest(dest / name) != sha
-        for name, sha in dep["files"].items()
+        for name, sha in expected.items()
     ):
-        # 建立放 limine 的目录
         dest.mkdir(parents=True, exist_ok=True)
         with tarfile.open(archive) as tar:
             for member in tar.getmembers():
-                parts = Path(member.name).parts
+                archive_path = PurePosixPath(member.name)
+                parts = archive_path.parts
+
+                if archive_path.is_absolute() or ".." in parts:
+                    raise RuntimeError(f"归档中包含不安全路径：{member.name}")
                 if len(parts) > 1:
-                    member.name = str(Path(*parts[1:]))
-                    tar.extract(member, dest, filter)
+                    parts = parts[1:]
+                if not parts:
+                    continue
+
+                target = (dest / Path(*parts)).resolve()
+
+                try:
+                    target.relative_to(dest.resolve())
+                except ValueError as error:
+                    raise RuntimeError(
+                        f"归档路径超出目标目录：{member.name}"
+                    ) from error
+
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                elif member.isfile():
+                    extracted = tar.extractfile(member)
+                    if extracted is None:
+                        raise RuntimeError(f"无法读取归档文件：{member.name}")
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with extracted, target.open("wb") as output:
+                        shutil.copyfileobj(extracted, output)
+                else:
+                    raise RuntimeError(f"归档中包含不支持的文件类型：{member.name}")
+
+    # 开始下载 limine 协议头（以便内核与 BootLoader 通信）
     header = lock["protocol"]
-    download(header["url"], ROOT / "third_party/limine.h", header["sha256"])
+    protocol_path = ROOT / "third_party/limine.h"
+    if (
+        force
+        or not protocol_path.is_file()
+        or digest(protocol_path) != header["sha256"]
+    ):
+        download(header["url"], protocol_path, header["sha256"])
+
+    # 下载 QEMU 虚拟机的 OVMF 固件
     firmware = ROOT / "third_party/firmware"
     firmware.mkdir(parents=True, exist_ok=True)
     for item in lock["firmware"]:
         target = firmware / item["name"]
-        if target.exists() and digest(target) == item["sha256"]:
-            continue
-        qemu = Path(tool("qemu-system-x86_64", "qemu")).resolve()
-        candidates = [
-            qemu.parent.parent / "share/qemu" / item["name"],
-            Path("/opt/homebrew/opt/qemu/share/qemu") / item["name"],
-            Path("/usr/share/qemu") / item["name"],
-            Path("/usr/share/OVMF") / item["name"],
-        ]
-        source = next(
-            (p for p in candidates if p.is_file() and digest(p) == item["sha256"]), None
-        )
-        if not source:
-            raise RuntimeError(
-                f"Pinned firmware {item['name']} not found. "
-                f"Use QEMU {lock['qemu_reference_version']}, or copy the documented matching "
-                "firmware into third_party/firmware; do not silently substitute it."
+        if force or not target.exists() or item["sha256"] != digest(target):
+            qemu = Path(tool("qemu-system-x86_64", "qemu")).resolve()
+            candidates = [
+                qemu.parent.parent / "share/qemu" / item["name"],
+                Path("/opt/homebrew/opt/qemu/share/qemu") / item["name"],
+                Path("/usr/share/qemu") / item["name"],
+                Path("/usr/share/OVMF") / item["name"],
+            ]
+            source = next(
+                (p for p in candidates if p.is_file() and digest(p) == item["sha256"]),
+                None,
             )
-        shutil.copyfile(source, target)
+            if not source:
+                raise RuntimeError(
+                    f"找不到摘要匹配的固件：{item['name']}。\n"
+                    f"请使用参考版本 QEMU {lock['qemu_reference_version']}。\n"
+                    "或者将匹配的固件放入 third_party/firmware。"
+                )
+            shutil.copyfile(source, target)
     return lock
+
+
+# 入口函数
+def main():
+    parser = argparse.ArgumentParser(description="一键下载与校验 Airi-OS 依赖资源")
+    parser.add_argument(
+        "--force", action="store_true", help="忽略已存在文件，强制重新下载并覆盖"
+    )
+    args = parser.parse_args()
+
+    print("正在准备项目依赖...")
+    try:
+        lock = prepare(force=args.force)
+        print(
+            f"准备完成：limine {lock['limine']['version']}，协议头 {lock['protocol']['commit'][:12]}，固件 {len(lock['firmware'])} 项"
+        )
+        print(f"输出目录：{ROOT / 'third_party'}")
+    except Exception as exc:
+        raise SystemExit(f"依赖准备失败：{exc}") from exc
+
+
+if __name__ == "__main__":
+    main()

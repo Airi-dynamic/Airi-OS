@@ -1,0 +1,8 @@
+CompileFlags:
+  Add:
+    - -I/Users/airi/Desktop/Airi-OS/include
+    - -I/Users/airi/Desktop/Airi-OS/kernel
+    - -I/Users/airi/Desktop/Airi-OS/third_party
+    - -I/Users/airi/Desktop/Airi-OS
+    - -D__KERNEL__
+    - -std=c17
