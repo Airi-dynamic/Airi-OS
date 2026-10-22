@@ -5,4 +5,11 @@ CompileFlags:
     - -I/Users/airi/Desktop/Airi-OS/third_party
     - -I/Users/airi/Desktop/Airi-OS
     - -D__KERNEL__
+
+---
+If:
+  PathMatch: .*\.(c|h)$
+CompileFlags:
+  Add:
+    - -xc
     - -std=c17
