@@ -1,5 +1,6 @@
 CompileFlags:
   Add:
+    - --target=x86_64-unknown-none-elf
     - -I/Users/airi/Desktop/Airi-OS/include
     - -I/Users/airi/Desktop/Airi-OS/kernel
     - -I/Users/airi/Desktop/Airi-OS/third_party

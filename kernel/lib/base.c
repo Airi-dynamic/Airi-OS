@@ -88,6 +88,7 @@ static void number(struct output *o, uint64_t value, unsigned radix, unsigned wi
     }
 }
 
+// v = variable list，s = string，n = number restricted
 int airi_vsnprintf(char *dst, size_t cap, const char *fmt, va_list args) {
     struct output o = {dst, cap, 0};
     while (*fmt) {
