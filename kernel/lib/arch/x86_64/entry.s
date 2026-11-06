@@ -12,7 +12,7 @@ _start:
     hlt                 // 这里不应该再被执行，只是兜底停机
     jmp 1b              // 汇编器语法，b 表示向后找最近标签 1，恢复执行后再次停机
 .size _start, .-_start  // 记录元数据，即 _start 对应函数大小
-.section bss
+.section .bss
 .balign 16
 
 airi_stack_bottom:

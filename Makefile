@@ -4,8 +4,10 @@ HOST_CC := cc		# 预留未使用
 PROFILE ?= normal	# 条件赋值，如果为空就赋值
 OUT := build/$(PROFILE)
 
-SOURCES := kernel/boot/limine.c kernel/lib/base.c kernel/lib/runtime.c kernel/arch/x86_64/serial.c
-OBJECTS := $(patsubst %.c, $(OUT)/%.o, $(SOURCES)) $(OUT)/kernel/arch/x86-64/entry.o
+SOURCES := kernel/lib/boot/limine.c kernel/lib/boot/info.c kernel/lib/base.c \
+           kernel/lib/runtime.c kernel/lib/arch/x86_64/serial.c
+OBJECTS := $(patsubst %.c, $(OUT)/%.o, $(SOURCES)) \
+           $(OUT)/kernel/lib/arch/x86_64/entry.o
 # GNU Make 内置 pattern substance 函数，% 代表匹配结果，语法是 $(patsubst 匹配模式, 替换模式, 输入文本)
 
 # Clang target triple：CPU 架构为 x86-64，目标环境为无操作系统的 ELF 裸机。
@@ -26,6 +28,7 @@ OBJECTS := $(patsubst %.c, $(OUT)/%.o, $(SOURCES)) $(OUT)/kernel/arch/x86-64/ent
 CFLAGS := --target=x86_64-unknown-none-elf -std=c11 -O2 -g -Wall -Wextra -Werror \
           -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie \
           -mno-red-zone -mgeneral-regs-only -mcmodel=kernel -MMD -MP
+ASFLAGS := --target=x86_64-unknown-none-elf -g
 
 # CPPFLAGS 是预处理器选项，通常由编译器在 C 编译阶段传给预处理器。
 # -I<目录>：增加头文件搜索目录；尖括号/引号 include 会据此查找项目头文件。
@@ -35,7 +38,7 @@ ifeq ($(PROFILE),no-framebuffer)
 CPPFLAGS += -DAIRI_TEST_NO_FRAMEBUFFER	# -DNAME 定义预处理器注入的宏，源码可用 #ifdef 检查它。
 endif
 
-ifeq($(PROFILE),edit-exprimental)
+ifeq ($(PROFILE),edit-exprimental)
 CPPFLAGS += -DAIRI_PANEL_TITLE='"LOCAL / MAINTENANCE CONSOLE"' \
             -DAIRI_DEMO_MESSAGE='"I changed the output and rebooted"'
 endif
@@ -44,13 +47,13 @@ endif
 all: image
 kernel: $(OUT)/airios.elf
 
-$(OUT).o: %.c
+$(OUT)/%.o: %.c
 	@mkdir -p $(dir $@)							# 调用 GNU Make 的内置 dir 函数，提取目录部分
-	$(cc) $(CPPFLAGS) $(CFLAGS) -c $< -o $@		# $< 代表当前规则的第一个依赖文件，$@ 代表当前规则的目标文件
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@		# $< 代表当前规则的第一个依赖文件，$@ 代表当前规则的目标文件
 
-$(OUT).o: %.s
+$(OUT)/%.o: %.s
 	@mkdir -p $(dir $@)
-	$(cc) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(ASFLAGS) -c $< -o $@
 
 # -m elf_x86_64：选择 x86-64 ELF 链接目标（emulation），与内核架构一致。
 # -nostdlib：不搜索链接器的默认库目录；本规则只使用明确给出的对象文件和链接脚本。

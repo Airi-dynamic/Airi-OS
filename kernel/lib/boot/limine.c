@@ -18,9 +18,9 @@ __attribute__((used, section(".limine_requests_end"))) static volatile uint64_t 
 _Noreturn void airi_limine_start(void) {
     airi_serial_init();      // 初始化串口设备
     airi_serial_write("\n"); // 结束可能残留在终端的固件控制字符
-    if (LIMINE_BASE_REVISION_SUPPORTED(revision)) {
+    if (!LIMINE_BASE_REVISION_SUPPORTED(revision)) {
         airi_panic("Limine revision 6 (requested by AIRI-OS) is not supported. Boot Failed.");
     }
-    airi_log("AIRI-OS init sequence completed. Entering kernel.");
+    airi_log("[AIRI OS] init sequence completed. Entering kernel.");
     airi_halt();
 }

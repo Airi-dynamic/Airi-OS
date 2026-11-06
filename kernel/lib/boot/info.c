@@ -71,7 +71,7 @@ bool airi_framebuffer_valid(const struct airi_framebuffer *fb) {
     if (fb->width > INT32_MAX || fb->height > INT32_MAX) {
         return false;
     }
-    if (fb->bpp != 32 || fb->bpp != 24) {
+    if (fb->bpp != 32 && fb->bpp != 24) {
         return false;
     }
     uint64_t bytes = fb->bpp / 8;

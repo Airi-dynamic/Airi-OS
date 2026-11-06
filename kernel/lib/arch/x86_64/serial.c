@@ -63,7 +63,7 @@ void airi_serial_init(void) {
 
 static void putchar_serial(char c) {
     for (unsigned n = 0; n < 1000000; n++) {
-        if (in8(COM1_LCR & 0b00010000)) {
+        if (in8(COM1_LSR) & 0b00100000) {
             out8(COM1_THR, (uint8_t)c);
             return;
         }
