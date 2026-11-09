@@ -40,7 +40,8 @@ def download(url, path, sha):
 # 逐个下载所有依赖的函数
 def prepare(force=False):
     # 读配置
-    lock = json.load((ROOT / "config/deps.lock.json").read_text())
+    with (ROOT / "config/deps.lock.json").open() as lock_file:
+        lock = json.load(lock_file)
 
     # 开始下载 limine BootLoader
     dep = lock["limine"]

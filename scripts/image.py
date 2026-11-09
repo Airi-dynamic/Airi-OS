@@ -26,6 +26,11 @@ shutil.copyfile(
     staging / "boot/limine/limine-uefi-cd.bin",
 )  # 放入 xorriso 要登记为 EFI 启动映像的 Limine 光盘映像
 
+# 这里的 image 和基础知识里提到的 SSD 启动介质是同一类物品
+# 只不过这里选择使用了光盘启动介质的规范
+# 用于启动 Limine 的镜像已经由 Limine 预先制作好，这里只需要下载并作为参数传入 QEMU 启动项
+# 我们只负责编写 Limine 要启动的 OS
+
 subprocess.run(
     [
         tool("xorriso", "xorriso"),

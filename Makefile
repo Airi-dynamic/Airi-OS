@@ -1,12 +1,15 @@
 CC := clang
-LD := ld.lld		# 立即展开右边变量并赋值
-HOST_CC := cc		# 预留未使用
-PROFILE ?= normal	# 条件赋值，如果为空就赋值
+# 立即展开右边变量并赋值。
+LD := ld.lld
+# 预留未使用。
+HOST_CC := cc
+# 条件赋值，如果为空就赋值。
+PROFILE ?= normal
 OUT := build/$(PROFILE)
 
 SOURCES := kernel/lib/boot/limine.c kernel/lib/boot/info.c kernel/lib/base.c \
            kernel/lib/runtime.c kernel/lib/arch/x86_64/serial.c
-OBJECTS := $(patsubst %.c, $(OUT)/%.o, $(SOURCES)) \
+OBJECTS := $(patsubst %.c,$(OUT)/%.o,$(SOURCES)) \
            $(OUT)/kernel/lib/arch/x86_64/entry.o
 # GNU Make 内置 pattern substance 函数，% 代表匹配结果，语法是 $(patsubst 匹配模式, 替换模式, 输入文本)
 
@@ -43,7 +46,7 @@ CPPFLAGS += -DAIRI_PANEL_TITLE='"LOCAL / MAINTENANCE CONSOLE"' \
             -DAIRI_DEMO_MESSAGE='"I changed the output and rebooted"'
 endif
 
-.PHONY: all kernel image host-test clean
+.PHONY: all kernel image host-test clean deps
 all: image
 kernel: $(OUT)/airios.elf
 
@@ -68,3 +71,6 @@ $(OUT)/airios.elf: $(OBJECTS) kernel/linker.ld
 image: $(OUT)/airios.elf				# 可启动镜像通常还需要引导器文件、配置文件、目录结构等
 	python3 scripts/image.py $(PROFILE)
 -include $(OBJECTS:.o=.d)				# GNU Make 的变量替换引用 $(OBJECTS:模式=替换)
+
+deps:
+	python3 scripts/deps.py
